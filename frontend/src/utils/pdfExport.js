@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 /**
  * Generate cricket match scorecard PDF
@@ -17,7 +17,7 @@ export const generateMatchPDF = (match) => {
 
   // Colors
   const colors = {
-    primary: [26, 122, 74], // Cricket Green
+    primary: [26, 122, 74],
     darkGreen: [15, 81, 50],
     red: [220, 38, 38],
     blue: [37, 99, 235],
@@ -34,16 +34,13 @@ export const generateMatchPDF = (match) => {
   const margin = 14;
 
   // ===== HEADER =====
-  // Background banner
   doc.setFillColor(...colors.primary);
   doc.rect(0, 0, pageWidth, 35, "F");
 
-  // Cricket icon
   doc.setFontSize(24);
   doc.setTextColor(...colors.white);
   doc.text("🏏", margin, 22);
 
-  // Title
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.text("GULLY CRICKET", margin + 12, 18);
@@ -52,7 +49,6 @@ export const generateMatchPDF = (match) => {
   doc.setFont("helvetica", "normal");
   doc.text("Live Score Tracker - Match Scorecard", margin + 12, 25);
 
-  // Date in top right
   doc.setFontSize(9);
   const matchDate = match.matchDate
     ? new Date(match.matchDate).toLocaleDateString("en-IN", {
@@ -63,9 +59,12 @@ export const generateMatchPDF = (match) => {
     : "N/A";
   doc.text(matchDate, pageWidth - margin, 18, { align: "right" });
   doc.setFontSize(8);
-  doc.text(`Match ID: ${match._id?.substring(0, 8)}...`, pageWidth - margin, 24, {
-    align: "right",
-  });
+  doc.text(
+    `Match ID: ${match._id?.substring(0, 8)}...`,
+    pageWidth - margin,
+    24,
+    { align: "right" }
+  );
 
   yPos = 45;
 
@@ -80,7 +79,7 @@ export const generateMatchPDF = (match) => {
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...colors.gray);
   doc.text(
-    `📍 ${match.groundName || "Ground"} · ${match.totalOvers || 0} Overs Match`,
+    `${match.groundName || "Ground"} | ${match.totalOvers || 0} Overs Match`,
     pageWidth / 2,
     yPos,
     { align: "center" }
@@ -92,32 +91,25 @@ export const generateMatchPDF = (match) => {
   doc.setFillColor(...colors.lightGray);
   doc.roundedRect(margin, yPos, pageWidth - margin * 2, 25, 3, 3, "F");
 
-  // Team A
   doc.setTextColor(...colors.dark);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
   doc.text(match.teamA?.name || "Team A", margin + 5, yPos + 10);
 
-  // Team B
-  doc.text(
-    match.teamB?.name || "Team B",
-    pageWidth - margin - 5,
-    yPos + 10,
-    { align: "right" }
-  );
+  doc.text(match.teamB?.name || "Team B", pageWidth - margin - 5, yPos + 10, {
+    align: "right",
+  });
 
-  // VS in center
   doc.setTextColor(...colors.primary);
   doc.setFontSize(12);
   doc.text("VS", pageWidth / 2, yPos + 10, { align: "center" });
 
-  // Toss info
   doc.setTextColor(...colors.gray);
   doc.setFontSize(9);
   doc.setFont("helvetica", "italic");
-  const tossText = `🪙 ${match.toss?.winner || "N/A"} won the toss and elected to ${
-    match.toss?.decision || "bat"
-  } first`;
+  const tossText = `${
+    match.toss?.winner || "N/A"
+  } won the toss and elected to ${match.toss?.decision || "bat"} first`;
   doc.text(tossText, pageWidth / 2, yPos + 18, { align: "center" });
 
   yPos += 32;
@@ -130,18 +122,15 @@ export const generateMatchPDF = (match) => {
     doc.setTextColor(...colors.white);
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text(
-      `🏆 ${match.result.description}`,
-      pageWidth / 2,
-      yPos + 8,
-      { align: "center" }
-    );
+    doc.text(`WINNER: ${match.result.description}`, pageWidth / 2, yPos + 8, {
+      align: "center",
+    });
 
     if (match.result.manOfTheMatch?.playerName) {
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
       doc.text(
-        `⭐ Man of the Match: ${match.result.manOfTheMatch.playerName}`,
+        `Man of the Match: ${match.result.manOfTheMatch.playerName}`,
         pageWidth / 2,
         yPos + 14,
         { align: "center" }
@@ -176,7 +165,6 @@ export const generateMatchPDF = (match) => {
       yPos + 6.5
     );
 
-    // Score
     const scoreText = `${inning.totalRuns}/${inning.wickets} (${
       inning.oversCompleted
     }.${inning.ballsInCurrentOver || 0} ov)`;
@@ -225,7 +213,8 @@ export const generateMatchPDF = (match) => {
         b.balls > 0 ? ((b.runs / b.balls) * 100).toFixed(2) : "0.00",
       ]);
 
-      doc.autoTable({
+      // ✅ FIXED: Use autoTable as function, not method
+      autoTable(doc, {
         startY: yPos,
         head: [["Batter", "Dismissal", "R", "B", "4s", "6s", "SR"]],
         body: battingData,
@@ -256,6 +245,7 @@ export const generateMatchPDF = (match) => {
         },
       });
 
+      // ✅ FIXED: Get finalY from the lastAutoTable property
       yPos = doc.lastAutoTable.finalY + 3;
     }
 
@@ -280,9 +270,9 @@ export const generateMatchPDF = (match) => {
       doc.text(
         `Extras: ${inning.extras.total || 0} (wd ${
           inning.extras.wides || 0
-        }, nb ${inning.extras.noBalls || 0}, b ${
-          inning.extras.byes || 0
-        }, lb ${inning.extras.legByes || 0})`,
+        }, nb ${inning.extras.noBalls || 0}, b ${inning.extras.byes || 0}, lb ${
+          inning.extras.legByes || 0
+        })`,
         margin,
         yPos
       );
@@ -311,7 +301,8 @@ export const generateMatchPDF = (match) => {
         ];
       });
 
-      doc.autoTable({
+      // ✅ FIXED: Use autoTable as function
+      autoTable(doc, {
         startY: yPos,
         head: [["Bowler", "O", "M", "R", "W", "Eco"]],
         body: bowlingData,
@@ -333,7 +324,12 @@ export const generateMatchPDF = (match) => {
           1: { halign: "right", cellWidth: 18 },
           2: { halign: "right", cellWidth: 18 },
           3: { halign: "right", cellWidth: 18, textColor: colors.amber },
-          4: { halign: "right", cellWidth: 18, textColor: colors.red, fontStyle: "bold" },
+          4: {
+            halign: "right",
+            cellWidth: 18,
+            textColor: colors.red,
+            fontStyle: "bold",
+          },
           5: { halign: "right", cellWidth: 22 },
         },
         alternateRowStyles: {
@@ -351,17 +347,17 @@ export const generateMatchPDF = (match) => {
     doc.setPage(i);
     const footerY = doc.internal.pageSize.getHeight() - 10;
 
-    // Footer line
     doc.setDrawColor(...colors.primary);
     doc.setLineWidth(0.5);
     doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
 
-    // Footer text
     doc.setFontSize(7);
     doc.setTextColor(...colors.gray);
     doc.setFont("helvetica", "italic");
     doc.text(
-      `Generated on ${new Date().toLocaleString("en-IN")} | Gully Cricket Live Score Tracker`,
+      `Generated on ${new Date().toLocaleString(
+        "en-IN"
+      )} | Gully Cricket Live Score Tracker`,
       margin,
       footerY
     );
@@ -375,9 +371,13 @@ export const generateMatchPDF = (match) => {
   const fileName = `${match.title || "Match"}_Scorecard_${
     new Date().toISOString().split("T")[0]
   }.pdf`;
-  doc.save(fileName);
 
-  return fileName;
+  // Clean filename (remove special chars)
+  const cleanFileName = fileName.replace(/[^a-z0-9_\-.]/gi, "_");
+
+  doc.save(cleanFileName);
+
+  return cleanFileName;
 };
 
 /**
@@ -397,7 +397,7 @@ export const generateLiveScorecardPDF = (match, liveScore) => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text("🏏 LIVE MATCH SCORECARD", 14, 18);
+  doc.text("LIVE MATCH SCORECARD", 14, 18);
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
@@ -422,7 +422,7 @@ export const generateLiveScorecardPDF = (match, liveScore) => {
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.text(
-    `${match.groundName} · ${match.totalOvers} Overs Match`,
+    `${match.groundName} | ${match.totalOvers} Overs Match`,
     doc.internal.pageSize.getWidth() / 2,
     y,
     { align: "center" }
@@ -435,7 +435,15 @@ export const generateLiveScorecardPDF = (match, liveScore) => {
     const ci = liveScore.currentInnings;
 
     doc.setFillColor(26, 122, 74);
-    doc.roundedRect(14, y, doc.internal.pageSize.getWidth() - 28, 25, 3, 3, "F");
+    doc.roundedRect(
+      14,
+      y,
+      doc.internal.pageSize.getWidth() - 28,
+      25,
+      3,
+      3,
+      "F"
+    );
 
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
@@ -450,9 +458,12 @@ export const generateLiveScorecardPDF = (match, liveScore) => {
     doc.text(`(${ci.overs} ov)`, 55, y + 19);
 
     doc.setFontSize(9);
-    doc.text(`RR: ${ci.runRate || 0}`, doc.internal.pageSize.getWidth() - 18, y + 12, {
-      align: "right",
-    });
+    doc.text(
+      `RR: ${ci.runRate || 0}`,
+      doc.internal.pageSize.getWidth() - 18,
+      y + 12,
+      { align: "right" }
+    );
 
     if (ci.target) {
       doc.text(
@@ -467,7 +478,11 @@ export const generateLiveScorecardPDF = (match, liveScore) => {
   }
 
   // Save
-  doc.save(`${match.title}_Live_${Date.now()}.pdf`);
+  const fileName = `${match.title}_Live_${Date.now()}.pdf`.replace(
+    /[^a-z0-9_\-.]/gi,
+    "_"
+  );
+  doc.save(fileName);
 };
 
 export default { generateMatchPDF, generateLiveScorecardPDF };
