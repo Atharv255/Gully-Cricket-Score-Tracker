@@ -83,7 +83,6 @@ class ScoringService {
     const bowlerPlayer = await Player.findById(bowlerId);
 
     // For extras (wide/no_ball), use current ball number (don't increment)
-    // Ensure ballNumber is always at least 1
     let actualBallNumber;
     if (isValid) {
       actualBallNumber = ballNumber;
@@ -199,7 +198,6 @@ class ScoringService {
       innings.wickets += 1;
 
       // Only credit bowler with wicket if NOT a run-out
-      // Run-outs don't count for bowler stats
       if (isValid && wicketType !== WICKET_TYPES.RUN_OUT) {
         currentBowler.wickets += 1;
       }
@@ -215,20 +213,37 @@ class ScoringService {
         // IMPORTANT: Clear isStriker flag from OUT batter
         dismissedBatter.isStriker = false;
 
-        let dismissalInfo = wicketType.replace(/_/g, " ").toUpperCase();
-        if (
-          (wicketType === WICKET_TYPES.CAUGHT ||
-            wicketType === WICKET_TYPES.STUMPED) &&
-          fielderName
-        ) {
-          dismissalInfo += ` (${fielderName})`;
+        // Build cricket-style dismissal info
+        let dismissalInfo = "";
+
+        if (wicketType === WICKET_TYPES.CAUGHT) {
+          dismissalInfo = fielderName
+            ? `c ${fielderName} b ${currentBowler.playerName}`
+            : `Caught b ${currentBowler.playerName}`;
+        } else if (wicketType === WICKET_TYPES.STUMPED) {
+          dismissalInfo = fielderName
+            ? `st ${fielderName} b ${currentBowler.playerName}`
+            : `Stumped b ${currentBowler.playerName}`;
+        } else if (wicketType === WICKET_TYPES.RUN_OUT) {
+          dismissalInfo = fielderName
+            ? `Run Out (${fielderName})`
+            : "Run Out";
+        } else if (wicketType === WICKET_TYPES.BOWLED) {
+          dismissalInfo = `b ${currentBowler.playerName}`;
+        } else if (wicketType === WICKET_TYPES.LBW) {
+          dismissalInfo = `lbw b ${currentBowler.playerName}`;
+        } else if (wicketType === WICKET_TYPES.HIT_WICKET) {
+          dismissalInfo = `Hit Wicket b ${currentBowler.playerName}`;
+        } else if (wicketType === WICKET_TYPES.RETIRED_HURT) {
+          dismissalInfo = "Retired Hurt";
+        } else {
+          dismissalInfo = wicketType.replace(/_/g, " ").toUpperCase();
         }
-        if (wicketType !== WICKET_TYPES.RUN_OUT) {
-          dismissalInfo += ` b ${currentBowler.playerName}`;
-        }
+
         dismissedBatter.dismissalInfo = dismissalInfo;
         dismissedBatter.dismissedBy = {
-          bowlerName: currentBowler.playerName,
+          bowlerName:
+            wicketType !== WICKET_TYPES.RUN_OUT ? currentBowler.playerName : "",
           fielderName: fielderName || "",
         };
 
@@ -256,6 +271,7 @@ class ScoringService {
         dismissalInfo: dismissedBatter?.dismissalInfo || "",
         totalScoreAtFall: `${innings.totalRuns}/${innings.wickets}`,
         overAtFall: `${innings.oversCompleted}.${innings.ballsInCurrentOver}`,
+        fielderName: fielderName || "",
       };
 
       // Reset partnership
@@ -285,7 +301,7 @@ class ScoringService {
       currentBowler.currentOverRuns = 0;
       currentBowler.isCurrentBowler = false;
 
-      // Reset current bowler so frontend knows to ask for new one
+      // Reset current bowler
       innings.currentBowler = null;
       innings.lastBowler = bowlerId;
 
@@ -304,7 +320,7 @@ class ScoringService {
       innings.currentStriker = innings.currentNonStriker;
       innings.currentNonStriker = temp;
 
-      // Update isStriker flags - ONLY for batters that are still batting
+      // Update isStriker flags
       innings.batters.forEach((b) => {
         if (b.status === PLAYER_STATUS.BATTING) {
           b.isStriker =
@@ -357,7 +373,7 @@ class ScoringService {
       innings.recentBalls = innings.recentBalls.slice(-24);
     }
 
-    // Generate and save commentary
+    // Generate commentary with fielder info
     const commentaryText = generateCommentary({
       runs,
       extraType,
@@ -375,6 +391,7 @@ class ScoringService {
         player: bowlerId,
         playerName: currentBowler.playerName,
       },
+      fielderName: fielderName || "",
       overNumber,
       ballNumber: actualBallNumber,
     });
@@ -401,7 +418,7 @@ class ScoringService {
     ball.commentary = commentaryText;
     await ball.save();
 
-    // Check innings complete - pass team size for proper wicket calculation
+    // Check innings complete - pass team size
     const teamSize = innings.batters?.length || 11;
     const inningsComplete = isInningsComplete(
       innings.wickets,
@@ -448,15 +465,14 @@ class ScoringService {
     const innings = await Innings.findById(currentInningsId);
     if (!innings) throw new ApiError(404, "Innings not found");
 
-    // STEP 1: Find ALL batters that are OUT and have isStriker = true
-    // and clear their isStriker flag
+    // Clear isStriker from OUT batters
     innings.batters.forEach((b) => {
       if (b.status === PLAYER_STATUS.OUT) {
         b.isStriker = false;
       }
     });
 
-    // STEP 2: Clear isStriker from all batters except non-striker
+    // Clear isStriker from all batters except non-striker
     const nonStrikerId = innings.currentNonStriker?.toString();
     innings.batters.forEach((b) => {
       if (b.player.toString() !== nonStrikerId) {
@@ -464,13 +480,12 @@ class ScoringService {
       }
     });
 
-    // STEP 3: Find or add the new batter
+    // Find or add the new batter
     let batter = innings.batters.find(
       (b) => b.player.toString() === playerId.toString()
     );
 
     if (!batter) {
-      // Add new batter if not in list
       innings.batters.push({
         player: playerId,
         playerName,
@@ -484,15 +499,14 @@ class ScoringService {
       });
       batter = innings.batters[innings.batters.length - 1];
     } else {
-      // Update existing batter to be batting and on strike
       batter.status = PLAYER_STATUS.BATTING;
       batter.isStriker = true;
     }
 
-    // STEP 4: Set new striker
+    // Set new striker
     innings.currentStriker = playerId;
 
-    // STEP 5: Make sure non-striker is NOT marked as striker
+    // Make sure non-striker is NOT marked as striker
     const nonStrikerBatter = innings.batters.find(
       (b) => b.player.toString() === innings.currentNonStriker?.toString()
     );
@@ -500,7 +514,7 @@ class ScoringService {
       nonStrikerBatter.isStriker = false;
     }
 
-    // STEP 6: Update partnership for new pair
+    // Update partnership for new pair
     innings.partnership = {
       runs: 0,
       balls: 0,
@@ -508,7 +522,6 @@ class ScoringService {
       batter2: innings.currentNonStriker,
     };
 
-    // Mark innings as modified for nested array changes
     innings.markModified("batters");
 
     await innings.save();
@@ -683,6 +696,10 @@ class ScoringService {
       if (dismissedBatter) {
         dismissedBatter.status = PLAYER_STATUS.BATTING;
         dismissedBatter.dismissalInfo = "";
+        dismissedBatter.dismissedBy = {
+          bowlerName: "",
+          fielderName: "",
+        };
       }
     }
 
@@ -764,7 +781,6 @@ class ScoringService {
 
     const target = firstInnings.totalRuns + 1;
 
-    // Batting team is now bowling team and vice versa
     const battingTeam = await Team.findById(firstInnings.bowlingTeam).populate(
       "players.player"
     );
@@ -772,7 +788,6 @@ class ScoringService {
       "players.player"
     );
 
-    // Create batting stats for all players
     const batterStats = battingTeam.players.map((p, index) => ({
       player: p.player._id,
       playerName: p.player.name,
@@ -858,7 +873,6 @@ class ScoringService {
     const match = await Match.findById(matchId);
     if (!match) throw new ApiError(404, "Match not found");
 
-    // If both innings done, calculate result automatically
     if (match.innings.length === 2) {
       const innings1 = await Innings.findById(match.innings[0]);
       const innings2 = await Innings.findById(match.innings[1]);

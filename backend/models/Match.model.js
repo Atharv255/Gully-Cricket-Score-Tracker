@@ -80,7 +80,7 @@ const matchSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Total overs is required"],
       min: [1, "Minimum 1 over"],
-      max: [50, "Maximum 50 overs"],
+      // No max limit - admin can set any number of overs
     },
     teamA: {
       team: {

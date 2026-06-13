@@ -9,6 +9,7 @@ import SelectBowlerModal from "./SelectBowlerModal";
 import EndInningsModal from "./EndInningsModal";
 import MatchResultModal from "./MatchResultModal";
 import RunOutModal from "./RunOutModal";
+import FielderSelectModal from "./FielderSelectModal";
 import {
   useRecordBallMutation,
   useSelectBatsmanMutation,
@@ -30,6 +31,8 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
   const [showEndInningsModal, setShowEndInningsModal] = useState(false);
   const [showEndMatchModal, setShowEndMatchModal] = useState(false);
   const [showRunOutModal, setShowRunOutModal] = useState(false);
+  const [showFielderModal, setShowFielderModal] = useState(false);
+  const [pendingWicket, setPendingWicket] = useState(null);
 
   const [recordBall, { isLoading: isRecording }] = useRecordBallMutation();
   const [selectBatsman, { isLoading: isSelectingBatsman }] =
@@ -171,6 +174,14 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
         return;
       }
 
+      // For caught or stumped, ask who took the catch/stumping
+      if (wicketType === "caught" || wicketType === "stumped") {
+        setPendingWicket(wicketType);
+        setShowFielderModal(true);
+        return;
+      }
+
+      // For other wickets (bowled, lbw, hit_wicket), record directly
       const ballData = {
         matchId,
         runs: 0,
@@ -220,6 +231,112 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
     ]
   );
 
+  // ===== HANDLE FIELDER SELECTED (for caught/stumped) =====
+  const handleFielderSelected = async ({ fielderName }) => {
+    if (!pendingWicket) return;
+
+    const ballData = {
+      matchId,
+      runs: 0,
+      extraType: "none",
+      extraRuns: 0,
+      isWicket: true,
+      wicketType: pendingWicket,
+      strikerId: striker.player?._id || striker.player,
+      nonStrikerId: nonStriker.player?._id || nonStriker.player,
+      bowlerId: currentBowler.player?._id || currentBowler.player,
+      dismissedBatterId: striker.player?._id || striker.player,
+      fielderName: fielderName,
+    };
+
+    try {
+      const result = await recordBall(ballData).unwrap();
+
+      const wicketMsg =
+        pendingWicket === "caught"
+          ? `🤲 CAUGHT by ${fielderName}! ${striker.playerName} is OUT!`
+          : `🏏 STUMPED by ${fielderName}! ${striker.playerName} is OUT!`;
+
+      toast.error(wicketMsg, {
+        duration: 4000,
+        style: {
+          background: "#450a0a",
+          color: "#fca5a5",
+          border: "1px solid #991b1b",
+          fontWeight: "bold",
+        },
+      });
+
+      setShowFielderModal(false);
+      setPendingWicket(null);
+      setSelectedExtra("");
+      setSelectedWicket("");
+
+      if (result.data?.requireNewBatsman) {
+        setTimeout(() => setShowBatsmanModal(true), 500);
+      }
+
+      if (result.data?.inningsComplete) {
+        if (match?.currentInnings === 1) {
+          setTimeout(() => setShowEndInningsModal(true), 500);
+        } else {
+          setTimeout(() => setShowEndMatchModal(true), 500);
+        }
+      }
+
+      onUpdate?.();
+    } catch (error) {
+      toast.error(error?.data?.message || "Failed to record wicket");
+    }
+  };
+
+  // ===== HANDLE SKIP FIELDER (record wicket without fielder name) =====
+  const handleSkipFielder = async () => {
+    if (!pendingWicket) {
+      setShowFielderModal(false);
+      return;
+    }
+
+    const ballData = {
+      matchId,
+      runs: 0,
+      extraType: "none",
+      extraRuns: 0,
+      isWicket: true,
+      wicketType: pendingWicket,
+      strikerId: striker.player?._id || striker.player,
+      nonStrikerId: nonStriker.player?._id || nonStriker.player,
+      bowlerId: currentBowler.player?._id || currentBowler.player,
+      dismissedBatterId: striker.player?._id || striker.player,
+    };
+
+    try {
+      const result = await recordBall(ballData).unwrap();
+      showToast.wicket(striker.playerName);
+
+      setShowFielderModal(false);
+      setPendingWicket(null);
+      setSelectedExtra("");
+      setSelectedWicket("");
+
+      if (result.data?.requireNewBatsman) {
+        setTimeout(() => setShowBatsmanModal(true), 500);
+      }
+
+      if (result.data?.inningsComplete) {
+        if (match?.currentInnings === 1) {
+          setTimeout(() => setShowEndInningsModal(true), 500);
+        } else {
+          setTimeout(() => setShowEndMatchModal(true), 500);
+        }
+      }
+
+      onUpdate?.();
+    } catch (error) {
+      toast.error(error?.data?.message || "Failed to record wicket");
+    }
+  };
+
   // ===== HANDLE RUN OUT =====
   const handleRunOut = async (runOutData) => {
     const {
@@ -246,7 +363,11 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
     try {
       const result = await recordBall(ballData).unwrap();
 
-      toast.error(`🏃 RUN OUT! ${dismissedBatterName} is out!`, {
+      const msg = fielderName
+        ? `🏃 RUN OUT by ${fielderName}! ${dismissedBatterName} is out!`
+        : `🏃 RUN OUT! ${dismissedBatterName} is out!`;
+
+      toast.error(msg, {
         duration: 4000,
         style: {
           background: "#450a0a",
@@ -516,6 +637,17 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
         onConfirm={handleRunOut}
         striker={striker}
         nonStriker={nonStriker}
+        bowlingTeamPlayers={bowlingTeamPlayers}
+        isLoading={isRecording}
+      />
+
+      {/* Fielder Select Modal (for Caught/Stumped) */}
+      <FielderSelectModal
+        isOpen={showFielderModal}
+        onClose={handleSkipFielder}
+        onConfirm={handleFielderSelected}
+        wicketType={pendingWicket}
+        bowlingTeamPlayers={bowlingTeamPlayers}
         isLoading={isRecording}
       />
     </>

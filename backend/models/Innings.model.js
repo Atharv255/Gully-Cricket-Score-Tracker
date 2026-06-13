@@ -26,9 +26,9 @@ const batterSchema = new mongoose.Schema({
   },
   dismissedBy: {
     bowler: { type: mongoose.Schema.Types.ObjectId, ref: "Player" },
-    bowlerName: { type: String },
+    bowlerName: { type: String, default: "" },
     fielder: { type: mongoose.Schema.Types.ObjectId, ref: "Player" },
-    fielderName: { type: String },
+    fielderName: { type: String, default: "" },
   },
   isStriker: {
     type: Boolean,
@@ -128,12 +128,13 @@ const inningsSchema = new mongoose.Schema(
       batter2: { type: mongoose.Schema.Types.ObjectId, ref: "Player" },
     },
     lastWicket: {
-      playerName: { type: String },
-      runs: { type: Number },
-      balls: { type: Number },
-      dismissalInfo: { type: String },
-      totalScoreAtFall: { type: String },
-      overAtFall: { type: String },
+      playerName: { type: String, default: "" },
+      runs: { type: Number, default: 0 },
+      balls: { type: Number, default: 0 },
+      dismissalInfo: { type: String, default: "" },
+      totalScoreAtFall: { type: String, default: "" },
+      overAtFall: { type: String, default: "" },
+      fielderName: { type: String, default: "" },
     },
     recentBalls: [
       {
@@ -171,8 +172,7 @@ const inningsSchema = new mongoose.Schema(
 
 // Virtual for run rate
 inningsSchema.virtual("runRate").get(function () {
-  const totalBalls =
-    this.oversCompleted * 6 + (this.ballsInCurrentOver || 0);
+  const totalBalls = this.oversCompleted * 6 + (this.ballsInCurrentOver || 0);
   if (totalBalls === 0) return 0;
   return ((this.totalRuns / totalBalls) * 6).toFixed(2);
 });

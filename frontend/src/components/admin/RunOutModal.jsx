@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Modal from "../common/Modal";
 import Button from "../common/Button";
 import Input from "../common/Input";
+import Select from "../common/Select";
 
 const RunOutModal = ({
   isOpen,
@@ -9,11 +10,14 @@ const RunOutModal = ({
   onConfirm,
   striker,
   nonStriker,
+  bowlingTeamPlayers = [],
   isLoading = false,
 }) => {
   const [dismissedBatter, setDismissedBatter] = useState("");
   const [runsCompleted, setRunsCompleted] = useState(0);
-  const [fielderName, setFielderName] = useState("");
+  const [fielderId, setFielderId] = useState("");
+  const [customFielderName, setCustomFielderName] = useState("");
+  const [useCustomFielder, setUseCustomFielder] = useState(false);
 
   const handleConfirm = () => {
     if (!dismissedBatter) {
@@ -23,31 +27,49 @@ const RunOutModal = ({
     const dismissedPlayer =
       dismissedBatter === "striker" ? striker : nonStriker;
 
+    // Get fielder name
+    let fielderName = "";
+    if (useCustomFielder) {
+      fielderName = customFielderName.trim();
+    } else if (fielderId) {
+      const fielder = bowlingTeamPlayers.find((p) => p.player === fielderId);
+      fielderName = fielder?.playerName || "";
+    }
+
     onConfirm({
       dismissedBatterId: dismissedPlayer.player?._id || dismissedPlayer.player,
       dismissedBatterName: dismissedPlayer.playerName,
       runsCompleted: parseInt(runsCompleted) || 0,
-      fielderName: fielderName.trim(),
+      fielderName: fielderName,
     });
 
     // Reset state
     setDismissedBatter("");
     setRunsCompleted(0);
-    setFielderName("");
+    setFielderId("");
+    setCustomFielderName("");
+    setUseCustomFielder(false);
   };
 
   const handleClose = () => {
     setDismissedBatter("");
     setRunsCompleted(0);
-    setFielderName("");
+    setFielderId("");
+    setCustomFielderName("");
+    setUseCustomFielder(false);
     onClose();
   };
+
+  const fielderOptions = bowlingTeamPlayers.map((p) => ({
+    value: p.player,
+    label: p.playerName,
+  }));
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="🏃 Run Out - Select Dismissed Batter"
+      title="🏃 Run Out - Details"
       size="md"
       closable={true}
     >
@@ -114,7 +136,7 @@ const RunOutModal = ({
           </button>
         </div>
 
-        {/* Runs Completed Before Run Out */}
+        {/* Runs Completed */}
         <Input
           label="Runs Completed Before Run Out"
           name="runsCompleted"
@@ -124,18 +146,54 @@ const RunOutModal = ({
           min={0}
           max={6}
           placeholder="0"
-          hint="Number of runs completed before the run out (usually 0 or 1)"
+          hint="Number of runs completed before the run out"
         />
 
-        {/* Fielder Name */}
-        <Input
-          label="Fielder Name (Optional)"
-          name="fielderName"
-          value={fielderName}
-          onChange={(e) => setFielderName(e.target.value)}
-          placeholder="e.g. Ravindra Jadeja"
-          hint="Who threw/caught the ball"
-        />
+        {/* Fielder Selection */}
+        <div className="space-y-2">
+          <label className="label">Who Did the Run Out?</label>
+
+          {/* Toggle */}
+          <div className="flex gap-1 bg-gray-800 rounded-lg p-1 mb-2">
+            <button
+              type="button"
+              onClick={() => setUseCustomFielder(false)}
+              className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                !useCustomFielder
+                  ? "bg-cricket-green text-white"
+                  : "text-gray-400"
+              }`}
+            >
+              From Team
+            </button>
+            <button
+              type="button"
+              onClick={() => setUseCustomFielder(true)}
+              className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                useCustomFielder
+                  ? "bg-cricket-green text-white"
+                  : "text-gray-400"
+              }`}
+            >
+              Custom Name
+            </button>
+          </div>
+
+          {!useCustomFielder ? (
+            <Select
+              value={fielderId}
+              onChange={(e) => setFielderId(e.target.value)}
+              options={fielderOptions}
+              placeholder="Select fielder"
+            />
+          ) : (
+            <Input
+              value={customFielderName}
+              onChange={(e) => setCustomFielderName(e.target.value)}
+              placeholder="Enter fielder name"
+            />
+          )}
+        </div>
 
         {/* Action Buttons */}
         <div className="flex gap-3 pt-2">

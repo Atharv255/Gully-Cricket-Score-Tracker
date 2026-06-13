@@ -29,10 +29,6 @@ const TeamForm = ({ onSuccess, onCancel }) => {
   };
 
   const addPlayer = () => {
-    if (formData.players.length >= 11) {
-      toast.error("Maximum 11 players allowed");
-      return;
-    }
     setFormData((prev) => ({
       ...prev,
       players: [...prev.players, ""],
@@ -50,7 +46,8 @@ const TeamForm = ({ onSuccess, onCancel }) => {
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = "Team name is required";
-    if (!formData.captain.trim()) newErrors.captain = "Captain name is required";
+    if (!formData.captain.trim())
+      newErrors.captain = "Captain name is required";
     if (formData.players.filter((p) => p.trim()).length < 2) {
       newErrors.players = "At least 2 players required";
     }
@@ -128,7 +125,7 @@ const TeamForm = ({ onSuccess, onCancel }) => {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="label">
-            Players ({formData.players.filter((p) => p.trim()).length}/11)
+            Players ({formData.players.filter((p) => p.trim()).length})
             <span className="text-red-400 ml-1">*</span>
           </label>
           <Button
@@ -137,7 +134,6 @@ const TeamForm = ({ onSuccess, onCancel }) => {
             variant="secondary"
             onClick={addPlayer}
             icon={MdAdd}
-            disabled={formData.players.length >= 11}
           >
             Add Player
           </Button>

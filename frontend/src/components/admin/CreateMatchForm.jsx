@@ -61,9 +61,7 @@ const StepIndicator = ({ currentStep, totalSteps }) => {
             {index < steps.length - 1 && (
               <div
                 className={`flex-1 h-0.5 mb-4 mx-1 transition-all duration-300 ${
-                  currentStep > stepNumber
-                    ? "bg-cricket-green"
-                    : "bg-gray-800"
+                  currentStep > stepNumber ? "bg-cricket-green" : "bg-gray-800"
                 }`}
               />
             )}
@@ -78,7 +76,7 @@ const PlayerInputList = ({ players, onUpdate, onAdd, onRemove, error }) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between">
       <label className="label">
-        Players ({players.filter((p) => p.trim()).length}/11)
+        Players ({players.filter((p) => p.trim()).length})
         <span className="text-red-400 ml-1">*</span>
       </label>
       <Button
@@ -87,7 +85,6 @@ const PlayerInputList = ({ players, onUpdate, onAdd, onRemove, error }) => (
         variant="secondary"
         onClick={onAdd}
         icon={MdAdd}
-        disabled={players.length >= 11}
       >
         Add
       </Button>
@@ -151,10 +148,6 @@ const CreateMatchForm = () => {
   };
 
   const addPlayer = (team) => {
-    if (formData[team].players.length >= 11) {
-      toast.error("Maximum 11 players allowed");
-      return;
-    }
     setFormData((prev) => ({
       ...prev,
       [team]: { ...prev[team], players: [...prev[team].players, ""] },
@@ -182,8 +175,6 @@ const CreateMatchForm = () => {
       if (!formData.matchDate) newErrors.matchDate = "Match date is required";
       if (!formData.totalOvers || formData.totalOvers < 1)
         newErrors.totalOvers = "Valid overs required (min 1)";
-      if (formData.totalOvers > 50)
-        newErrors.totalOvers = "Max 50 overs allowed";
     }
 
     if (stepNumber === 2) {
@@ -243,16 +234,12 @@ const CreateMatchForm = () => {
       teamA: {
         name: formData.teamA.name.trim(),
         captain: formData.teamA.captain.trim(),
-        players: formData.teamA.players
-          .map((p) => p.trim())
-          .filter((p) => p),
+        players: formData.teamA.players.map((p) => p.trim()).filter((p) => p),
       },
       teamB: {
         name: formData.teamB.name.trim(),
         captain: formData.teamB.captain.trim(),
-        players: formData.teamB.players
-          .map((p) => p.trim())
-          .filter((p) => p),
+        players: formData.teamB.players.map((p) => p.trim()).filter((p) => p),
       },
       toss: {
         winner: formData.toss.winner,
@@ -327,9 +314,9 @@ const CreateMatchForm = () => {
                   updateField("totalOvers", parseInt(e.target.value) || "")
                 }
                 min={1}
-                max={50}
+                max={999}
                 error={errors.totalOvers}
-                hint="Between 1 to 50"
+                hint="No upper limit"
                 required
               />
             </div>
@@ -338,7 +325,7 @@ const CreateMatchForm = () => {
             <div>
               <p className="label">Quick Select Overs</p>
               <div className="flex gap-2 flex-wrap">
-                {[5, 10, 15, 20, 25, 30, 40, 50].map((ov) => (
+                {[5, 10, 15, 20, 30, 50, 75, 100].map((ov) => (
                   <button
                     key={ov}
                     type="button"
@@ -353,6 +340,9 @@ const CreateMatchForm = () => {
                   </button>
                 ))}
               </div>
+              <p className="text-xs text-gray-600 mt-1">
+                💡 You can enter any number of overs (1-999+)
+              </p>
             </div>
 
             <div className="flex justify-end pt-2">
@@ -390,9 +380,7 @@ const CreateMatchForm = () => {
                 label="Captain Name"
                 name="teamACaptain"
                 value={formData.teamA.captain}
-                onChange={(e) =>
-                  updateField("teamA.captain", e.target.value)
-                }
+                onChange={(e) => updateField("teamA.captain", e.target.value)}
                 placeholder="Captain's full name"
                 error={errors.teamACaptain}
                 required
@@ -461,9 +449,7 @@ const CreateMatchForm = () => {
                 label="Captain Name"
                 name="teamBCaptain"
                 value={formData.teamB.captain}
-                onChange={(e) =>
-                  updateField("teamB.captain", e.target.value)
-                }
+                onChange={(e) => updateField("teamB.captain", e.target.value)}
                 placeholder="Captain's full name"
                 error={errors.teamBCaptain}
                 required
@@ -483,13 +469,12 @@ const CreateMatchForm = () => {
               <span className="text-xs text-gray-500">
                 Players added:{" "}
                 <strong className="text-white">
-                  {formData.teamB.players.filter((p) => p.trim()).length}
+                  {formData.teamA.players.filter((p) => p.trim()).length}
                 </strong>
-                /11
               </span>
-              {formData.teamB.players.filter((p) => p.trim()).length >= 11 && (
+              {formData.teamA.players.filter((p) => p.trim()).length >= 2 && (
                 <span className="text-xs text-cricket-green font-semibold">
-                  ✓ Full team!
+                  ✓ Ready to play
                 </span>
               )}
             </div>

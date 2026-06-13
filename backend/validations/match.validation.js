@@ -24,13 +24,10 @@ const createMatchValidation = [
   body("totalOvers")
     .notEmpty()
     .withMessage("Total overs is required")
-    .isInt({ min: 1, max: 50 })
-    .withMessage("Total overs must be between 1 and 50"),
+    .isInt({ min: 1 })
+    .withMessage("Total overs must be at least 1"),
 
-  body("teamA.name")
-    .trim()
-    .notEmpty()
-    .withMessage("Team A name is required"),
+  body("teamA.name").trim().notEmpty().withMessage("Team A name is required"),
 
   body("teamA.captain")
     .trim()
@@ -38,13 +35,10 @@ const createMatchValidation = [
     .withMessage("Team A captain is required"),
 
   body("teamA.players")
-    .isArray({ min: 2, max: 11 })
-    .withMessage("Team A must have 2-11 players"),
+    .isArray({ min: 2 })
+    .withMessage("Team A must have at least 2 players"),
 
-  body("teamB.name")
-    .trim()
-    .notEmpty()
-    .withMessage("Team B name is required"),
+  body("teamB.name").trim().notEmpty().withMessage("Team B name is required"),
 
   body("teamB.captain")
     .trim()
@@ -52,13 +46,10 @@ const createMatchValidation = [
     .withMessage("Team B captain is required"),
 
   body("teamB.players")
-    .isArray({ min: 2, max: 11 })
-    .withMessage("Team B must have 2-11 players"),
+    .isArray({ min: 2 })
+    .withMessage("Team B must have at least 2 players"),
 
-  body("toss.winner")
-    .trim()
-    .notEmpty()
-    .withMessage("Toss winner is required"),
+  body("toss.winner").trim().notEmpty().withMessage("Toss winner is required"),
 
   body("toss.decision")
     .notEmpty()
