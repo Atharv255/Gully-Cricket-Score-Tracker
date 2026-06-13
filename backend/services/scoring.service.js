@@ -210,7 +210,6 @@ class ScoringService {
 
       if (dismissedBatter) {
         dismissedBatter.status = PLAYER_STATUS.OUT;
-        // IMPORTANT: Clear isStriker flag from OUT batter
         dismissedBatter.isStriker = false;
 
         // Build cricket-style dismissal info
@@ -225,7 +224,9 @@ class ScoringService {
             ? `st ${fielderName} b ${currentBowler.playerName}`
             : `Stumped b ${currentBowler.playerName}`;
         } else if (wicketType === WICKET_TYPES.RUN_OUT) {
-          dismissalInfo = fielderName ? `Run Out (${fielderName})` : "Run Out";
+          dismissalInfo = fielderName
+            ? `Run Out (${fielderName})`
+            : "Run Out";
         } else if (wicketType === WICKET_TYPES.BOWLED) {
           dismissalInfo = `b ${currentBowler.playerName}`;
         } else if (wicketType === WICKET_TYPES.LBW) {
@@ -252,7 +253,6 @@ class ScoringService {
         ) {
           innings.currentStriker = null;
         }
-        // If non-striker is out (run out), clear currentNonStriker
         if (
           dismissedBatter.player.toString() ===
           innings.currentNonStriker?.toString()
@@ -416,18 +416,32 @@ class ScoringService {
     ball.commentary = commentaryText;
     await ball.save();
 
-    // Check innings complete - pass team size
+    // ============================================================
+    // CRITICAL: Check innings complete with TARGET CHECK
+    // ============================================================
     const teamSize = innings.batters?.length || 11;
     const inningsComplete = isInningsComplete(
       innings.wickets,
       innings.oversCompleted,
       innings.ballsInCurrentOver,
       innings.totalOvers,
-      teamSize
+      teamSize,
+      innings.totalRuns,  // ← Pass current runs
+      innings.target       // ← Pass target
     );
 
     if (inningsComplete) {
       innings.status = INNINGS_STATUS.COMPLETED;
+      console.log(`🏁 Innings ${innings.inningsNumber} completed!`);
+      console.log(`   Score: ${innings.totalRuns}/${innings.wickets}`);
+      console.log(`   Target: ${innings.target || "N/A"}`);
+    }
+
+    // CRITICAL: Check if MATCH is complete (2nd innings done OR target chased)
+    let matchComplete = false;
+    if (innings.inningsNumber === 2 && inningsComplete) {
+      matchComplete = true;
+      console.log("🏆 MATCH COMPLETE!");
     }
 
     // Mark batters as modified for nested array changes
@@ -435,6 +449,14 @@ class ScoringService {
     innings.markModified("bowlers");
 
     await innings.save();
+
+    // ============================================================
+    // AUTO-END MATCH if it's complete (after 2nd innings)
+    // ============================================================
+    if (matchComplete) {
+      console.log("🎯 Auto-ending match...");
+      await this.autoEndMatch(matchId);
+    }
 
     return {
       ball,
@@ -444,9 +466,12 @@ class ScoringService {
       isOverComplete,
       isWicket,
       inningsComplete,
+      matchComplete,
       requireNewBatsman:
-        isWicket && innings.wickets < (innings.batters?.length || 11) - 1,
-      requireNewBowler: isOverComplete && !inningsComplete,
+        isWicket &&
+        innings.wickets < (innings.batters?.length || 11) - 1 &&
+        !matchComplete,
+      requireNewBowler: isOverComplete && !inningsComplete && !matchComplete,
     };
   }
 
@@ -463,14 +488,14 @@ class ScoringService {
     const innings = await Innings.findById(currentInningsId);
     if (!innings) throw new ApiError(404, "Innings not found");
 
-    // STEP 1: Clear isStriker from OUT batters
+    // Clear isStriker from OUT batters
     innings.batters.forEach((b) => {
       if (b.status === PLAYER_STATUS.OUT) {
         b.isStriker = false;
       }
     });
 
-    // STEP 2: Clear isStriker from all batters except non-striker
+    // Clear isStriker from all batters except non-striker
     const nonStrikerId = innings.currentNonStriker?.toString();
     innings.batters.forEach((b) => {
       if (b.player.toString() !== nonStrikerId) {
@@ -478,7 +503,7 @@ class ScoringService {
       }
     });
 
-    // STEP 3: Find or add the new batter
+    // Find or add the new batter
     let batter = innings.batters.find(
       (b) => b.player.toString() === playerId.toString()
     );
@@ -501,10 +526,10 @@ class ScoringService {
       batter.isStriker = true;
     }
 
-    // STEP 4: Set new striker
+    // Set new striker
     innings.currentStriker = playerId;
 
-    // STEP 5: Make sure non-striker is NOT marked as striker
+    // Make sure non-striker is NOT marked as striker
     const nonStrikerBatter = innings.batters.find(
       (b) => b.player.toString() === innings.currentNonStriker?.toString()
     );
@@ -512,7 +537,7 @@ class ScoringService {
       nonStrikerBatter.isStriker = false;
     }
 
-    // STEP 6: Update partnership for new pair
+    // Update partnership for new pair
     innings.partnership = {
       runs: 0,
       balls: 0,
@@ -524,8 +549,7 @@ class ScoringService {
 
     await innings.save();
 
-    // CRITICAL FIX: Return fully populated FRESH data
-    // This ensures frontend gets latest player info
+    // Return fully populated FRESH data
     const updatedInnings = await Innings.findById(innings._id)
       .populate("batters.player")
       .populate("bowlers.player")
@@ -533,8 +557,6 @@ class ScoringService {
       .populate("bowlingTeam");
 
     console.log(`✅ New batsman selected: ${playerName} (ID: ${playerId})`);
-    console.log(`   Current Striker: ${updatedInnings.currentStriker}`);
-    console.log(`   Current Non-Striker: ${updatedInnings.currentNonStriker}`);
 
     return updatedInnings;
   }
@@ -596,7 +618,7 @@ class ScoringService {
     innings.markModified("bowlers");
     await innings.save();
 
-    // CRITICAL FIX: Return fully populated FRESH data
+    // Return fully populated FRESH data
     const updatedInnings = await Innings.findById(innings._id)
       .populate("batters.player")
       .populate("bowlers.player")
@@ -604,7 +626,6 @@ class ScoringService {
       .populate("bowlingTeam");
 
     console.log(`✅ New bowler selected: ${playerName} (ID: ${playerId})`);
-    console.log(`   Current Bowler: ${updatedInnings.currentBowler}`);
 
     return updatedInnings;
   }
@@ -883,7 +904,75 @@ class ScoringService {
   }
 
   // ===================================================================
-  // END MATCH
+  // AUTO END MATCH (NEW - when target chased or 2nd innings complete)
+  // ===================================================================
+  async autoEndMatch(matchId) {
+    try {
+      const match = await Match.findById(matchId);
+      if (!match) {
+        console.error("❌ Match not found for auto-end:", matchId);
+        return;
+      }
+
+      if (match.status === MATCH_STATUS.COMPLETED) {
+        console.log("ℹ️ Match already completed");
+        return match;
+      }
+
+      if (match.innings.length !== 2) {
+        console.log("⚠️ Cannot auto-end - not in 2nd innings");
+        return match;
+      }
+
+      const innings1 = await Innings.findById(match.innings[0]);
+      const innings2 = await Innings.findById(match.innings[1]);
+
+      if (!innings1 || !innings2) {
+        console.error("❌ Innings data missing");
+        return match;
+      }
+
+      // Make sure 2nd innings is marked complete
+      if (innings2.status !== INNINGS_STATUS.COMPLETED) {
+        innings2.status = INNINGS_STATUS.COMPLETED;
+        await innings2.save();
+      }
+
+      // Calculate match result
+      const result = calculateMatchResult(innings1, innings2);
+
+      match.result = {
+        type: result?.type || "no_result",
+        winnerName: result?.winnerName || "",
+        winner: result?.winnerTeam || null,
+        margin: result?.margin || 0,
+        marginType: result?.marginType || "",
+        description: result?.description || "Match Ended",
+        manOfTheMatch: {},
+      };
+
+      match.status = MATCH_STATUS.COMPLETED;
+      await match.save();
+
+      // Create commentary for match end
+      await Commentary.create({
+        match: matchId,
+        innings: innings2._id,
+        text: `🏆 ${match.result.description}`,
+        type: "match_end",
+        isImportant: true,
+      });
+
+      console.log(`🏆 Match auto-ended! Result: ${match.result.description}`);
+
+      return match;
+    } catch (error) {
+      console.error("❌ Auto-end match error:", error);
+    }
+  }
+
+  // ===================================================================
+  // END MATCH (manual)
   // ===================================================================
   async endMatch(matchId, resultData) {
     const match = await Match.findById(matchId);
@@ -935,7 +1024,10 @@ class ScoringService {
       .populate("teamB.team")
       .populate({
         path: "innings",
-        populate: [{ path: "batters.player" }, { path: "bowlers.player" }],
+        populate: [
+          { path: "batters.player" },
+          { path: "bowlers.player" },
+        ],
       });
   }
 }

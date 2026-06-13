@@ -62,6 +62,22 @@ const LiveScoringPage = () => {
         duration: 4000,
       });
     },
+    onMatchEnd: (data) => {
+      if (data.liveScore) dispatch(setCurrentLiveScore(data.liveScore));
+      if (data.autoEnded) {
+        toast.success("🏆 Match Completed Automatically!", {
+          duration: 6000,
+          style: {
+            background: "#064e3b",
+            color: "#a7f3d0",
+            border: "1px solid #10b981",
+            fontWeight: "bold",
+            fontSize: "16px",
+          },
+        });
+      }
+      handleUpdate();
+    },
   });
 
   const handleUpdate = () => {
@@ -102,6 +118,73 @@ const LiveScoringPage = () => {
         <Link to="/admin/dashboard" className="text-cricket-green text-sm">
           Back to Dashboard
         </Link>
+      </div>
+    );
+  }
+
+  // Match is completed - show result page
+  if (match.status === "completed") {
+    return (
+      <div className="max-w-3xl mx-auto py-8">
+        <div className="flex items-center gap-3 mb-6">
+          <Link
+            to="/admin/dashboard"
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <MdArrowBack size={22} />
+          </Link>
+          <div>
+            <h1 className="text-lg font-black text-white">{match.title}</h1>
+            <p className="text-xs text-gray-500">Match Completed</p>
+          </div>
+        </div>
+
+        {/* Match Result Banner */}
+        <div className="bg-gradient-to-r from-cricket-green/20 to-cricket-darkgreen/20 border border-cricket-green/40 rounded-xl p-6 text-center mb-6">
+          <div className="text-5xl mb-3">🏆</div>
+          <h2 className="text-2xl font-black text-white mb-2">
+            {match.result?.description || "Match Ended"}
+          </h2>
+          {match.result?.manOfTheMatch?.playerName && (
+            <p className="text-amber-400 text-sm mt-3">
+              ⭐ Man of the Match: {match.result.manOfTheMatch.playerName}
+            </p>
+          )}
+        </div>
+
+        {/* Innings Summary */}
+        <div className="space-y-4">
+          {match.innings?.map((inn, index) => (
+            <div
+              key={index}
+              className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+            >
+              <p className="text-xs text-gray-500 mb-1">
+                {index === 0 ? "1st Innings" : "2nd Innings"}
+              </p>
+              <h3 className="text-base font-bold text-white">
+                {inn.battingTeamName}
+              </h3>
+              <p className="text-2xl font-black text-white font-mono mt-1">
+                {inn.totalRuns}/{inn.wickets}
+                <span className="text-sm text-gray-400 font-normal ml-2">
+                  ({inn.oversCompleted}.{inn.ballsInCurrentOver} ov)
+                </span>
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <Link to="/admin/dashboard" className="flex-1">
+            <Button variant="secondary" fullWidth>
+              Back to Dashboard
+            </Button>
+          </Link>
+          <Link to={`/live/${matchId}`} target="_blank" className="flex-1">
+            <Button fullWidth>View Public Page</Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -163,7 +246,6 @@ const LiveScoringPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left - Live Score View */}
         <div className="space-y-4">
-          {/* Previous innings summary */}
           {liveScore?.previousInnings && (
             <div className="bg-gray-800/50 rounded-xl p-3 border border-gray-700">
               <p className="text-xs text-gray-500 mb-1">1st Innings</p>
@@ -191,7 +273,6 @@ const LiveScoringPage = () => {
                 striker={currentInnings.striker}
                 nonStriker={currentInnings.nonStriker}
                 onSelectBatsman={() => {
-                  // Trigger event to open batsman modal in ScoringPanel
                   const event = new CustomEvent("openBatsmanModal");
                   window.dispatchEvent(event);
                 }}

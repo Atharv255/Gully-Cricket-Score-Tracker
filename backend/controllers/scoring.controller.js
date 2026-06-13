@@ -1,5 +1,6 @@
 const scoringService = require("../services/scoring.service");
 const liveService = require("../services/live.service");
+const matchService = require("../services/match.service");
 const socketService = require("../services/socket.service");
 const ApiResponse = require("../utils/apiResponse");
 
@@ -42,6 +43,16 @@ class ScoringController {
         });
       }
 
+      // CRITICAL: If match auto-completed, emit match end event
+      if (result.matchComplete) {
+        const match = await matchService.getMatchById(matchId);
+        socketService.emitMatchEnd(matchId, {
+          match,
+          liveScore,
+          autoEnded: true,
+        });
+      }
+
       return ApiResponse.success(
         res,
         {
@@ -50,11 +61,14 @@ class ScoringController {
           isOverComplete: result.isOverComplete,
           isWicket: result.isWicket,
           inningsComplete: result.inningsComplete,
+          matchComplete: result.matchComplete,
           requireNewBatsman: result.requireNewBatsman,
           requireNewBowler: result.requireNewBowler,
           liveScore,
         },
-        "Ball recorded successfully"
+        result.matchComplete
+          ? "Match completed automatically"
+          : "Ball recorded successfully"
       );
     } catch (error) {
       next(error);
@@ -69,10 +83,8 @@ class ScoringController {
         req.body
       );
 
-      // Get fresh live score with updated batsman info
       const liveScore = await liveService.getLiveScore(matchId);
 
-      // Emit BOTH events to update all clients immediately
       socketService.emitBatsmanChanged(matchId, { innings, liveScore });
       socketService.emitScoreUpdate(matchId, { liveScore });
 
@@ -94,10 +106,8 @@ class ScoringController {
         req.body
       );
 
-      // Get fresh live score with updated bowler info
       const liveScore = await liveService.getLiveScore(matchId);
 
-      // Emit BOTH events to update all clients immediately
       socketService.emitBowlerChanged(matchId, { innings, liveScore });
       socketService.emitScoreUpdate(matchId, { liveScore });
 

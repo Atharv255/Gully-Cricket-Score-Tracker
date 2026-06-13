@@ -99,6 +99,7 @@ const generateCommentary = (ballData) => {
     wicketType,
     striker,
     bowler,
+    fielderName,
     overNumber,
     ballNumber,
   } = ballData;
@@ -108,19 +109,25 @@ const generateCommentary = (ballData) => {
   if (isWicket) {
     switch (wicketType) {
       case WICKET_TYPES.BOWLED:
-        commentary += `OUT! ${striker.playerName} is BOWLED! What a delivery!`;
+        commentary += `OUT! ${striker.playerName} is BOWLED by ${bowler.playerName}! What a delivery!`;
         break;
       case WICKET_TYPES.CAUGHT:
-        commentary += `OUT! ${striker.playerName} is CAUGHT! Taken cleanly!`;
+        commentary += fielderName
+          ? `OUT! ${striker.playerName} is CAUGHT by ${fielderName} off ${bowler.playerName}!`
+          : `OUT! ${striker.playerName} is CAUGHT!`;
         break;
       case WICKET_TYPES.LBW:
         commentary += `OUT! LBW! ${striker.playerName} is given out!`;
         break;
       case WICKET_TYPES.STUMPED:
-        commentary += `OUT! STUMPED! ${striker.playerName} is out of his crease!`;
+        commentary += fielderName
+          ? `OUT! STUMPED by ${fielderName}! ${striker.playerName} is out!`
+          : `OUT! STUMPED!`;
         break;
       case WICKET_TYPES.RUN_OUT:
-        commentary += `OUT! RUN OUT! What a throw!`;
+        commentary += fielderName
+          ? `OUT! RUN OUT by ${fielderName}!`
+          : `OUT! RUN OUT! What a throw!`;
         break;
       case WICKET_TYPES.HIT_WICKET:
         commentary += `OUT! HIT WICKET! What an unfortunate dismissal!`;
@@ -131,7 +138,11 @@ const generateCommentary = (ballData) => {
   } else if (extraType === EXTRA_TYPES.WIDE) {
     commentary += `Wide ball! Extra run to the batting team.`;
   } else if (extraType === EXTRA_TYPES.NO_BALL) {
-    commentary += `No Ball! ${runs > 0 ? `${runs} run(s) off the bat plus no ball.` : "Free hit coming up!"}`;
+    commentary += `No Ball! ${
+      runs > 0
+        ? `${runs} run(s) off the bat plus no ball.`
+        : "Free hit coming up!"
+    }`;
   } else if (extraType === EXTRA_TYPES.BYE) {
     commentary += `Bye! ${runs} run(s) - missed by the wicketkeeper!`;
   } else if (extraType === EXTRA_TYPES.LEG_BYE) {
@@ -150,20 +161,65 @@ const generateCommentary = (ballData) => {
 };
 
 /**
- * Check if innings is complete
+ * Check if innings is complete - UPDATED WITH TARGET CHECK
  */
 const isInningsComplete = (
   wickets,
   oversCompleted,
   ballsInCurrentOver,
   totalOvers,
-  totalPlayers = 11
+  totalPlayers = 11,
+  totalRuns = 0,
+  target = null
 ) => {
   // Max wickets = team size - 1 (need 2 batters at crease)
   const maxWickets = Math.max(1, totalPlayers - 1);
   const totalBalls = totalOvers * 6;
   const ballsBowled = oversCompleted * 6 + ballsInCurrentOver;
-  return wickets >= maxWickets || ballsBowled >= totalBalls;
+
+  // Check 1: All out
+  if (wickets >= maxWickets) {
+    console.log("✅ Innings complete: All out");
+    return true;
+  }
+
+  // Check 2: All overs bowled
+  if (ballsBowled >= totalBalls) {
+    console.log("✅ Innings complete: All overs bowled");
+    return true;
+  }
+
+  // Check 3: Target chased (only for 2nd innings)
+  if (target !== null && target !== undefined && totalRuns >= target) {
+    console.log(
+      `✅ Innings complete: Target ${target} chased! (Scored: ${totalRuns})`
+    );
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Check if match is complete
+ */
+const isMatchComplete = (
+  currentInningsNumber,
+  inningsStatus,
+  target,
+  totalRuns
+) => {
+  // 2nd innings completed = match over
+  if (currentInningsNumber === 2 && inningsStatus === "completed") {
+    return true;
+  }
+
+  // Target chased in 2nd innings = match over
+  if (currentInningsNumber === 2 && target !== null && totalRuns >= target) {
+    return true;
+  }
+
+  return false;
 };
 
 /**
@@ -189,5 +245,6 @@ module.exports = {
   formatOvers,
   generateCommentary,
   isInningsComplete,
+  isMatchComplete,
   getBallDisplayValue,
 };
