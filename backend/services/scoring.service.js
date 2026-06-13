@@ -225,9 +225,7 @@ class ScoringService {
             ? `st ${fielderName} b ${currentBowler.playerName}`
             : `Stumped b ${currentBowler.playerName}`;
         } else if (wicketType === WICKET_TYPES.RUN_OUT) {
-          dismissalInfo = fielderName
-            ? `Run Out (${fielderName})`
-            : "Run Out";
+          dismissalInfo = fielderName ? `Run Out (${fielderName})` : "Run Out";
         } else if (wicketType === WICKET_TYPES.BOWLED) {
           dismissalInfo = `b ${currentBowler.playerName}`;
         } else if (wicketType === WICKET_TYPES.LBW) {
@@ -465,14 +463,14 @@ class ScoringService {
     const innings = await Innings.findById(currentInningsId);
     if (!innings) throw new ApiError(404, "Innings not found");
 
-    // Clear isStriker from OUT batters
+    // STEP 1: Clear isStriker from OUT batters
     innings.batters.forEach((b) => {
       if (b.status === PLAYER_STATUS.OUT) {
         b.isStriker = false;
       }
     });
 
-    // Clear isStriker from all batters except non-striker
+    // STEP 2: Clear isStriker from all batters except non-striker
     const nonStrikerId = innings.currentNonStriker?.toString();
     innings.batters.forEach((b) => {
       if (b.player.toString() !== nonStrikerId) {
@@ -480,7 +478,7 @@ class ScoringService {
       }
     });
 
-    // Find or add the new batter
+    // STEP 3: Find or add the new batter
     let batter = innings.batters.find(
       (b) => b.player.toString() === playerId.toString()
     );
@@ -503,10 +501,10 @@ class ScoringService {
       batter.isStriker = true;
     }
 
-    // Set new striker
+    // STEP 4: Set new striker
     innings.currentStriker = playerId;
 
-    // Make sure non-striker is NOT marked as striker
+    // STEP 5: Make sure non-striker is NOT marked as striker
     const nonStrikerBatter = innings.batters.find(
       (b) => b.player.toString() === innings.currentNonStriker?.toString()
     );
@@ -514,7 +512,7 @@ class ScoringService {
       nonStrikerBatter.isStriker = false;
     }
 
-    // Update partnership for new pair
+    // STEP 6: Update partnership for new pair
     innings.partnership = {
       runs: 0,
       balls: 0,
@@ -526,9 +524,19 @@ class ScoringService {
 
     await innings.save();
 
-    return await Innings.findById(innings._id)
+    // CRITICAL FIX: Return fully populated FRESH data
+    // This ensures frontend gets latest player info
+    const updatedInnings = await Innings.findById(innings._id)
       .populate("batters.player")
-      .populate("bowlers.player");
+      .populate("bowlers.player")
+      .populate("battingTeam")
+      .populate("bowlingTeam");
+
+    console.log(`✅ New batsman selected: ${playerName} (ID: ${playerId})`);
+    console.log(`   Current Striker: ${updatedInnings.currentStriker}`);
+    console.log(`   Current Non-Striker: ${updatedInnings.currentNonStriker}`);
+
+    return updatedInnings;
   }
 
   // ===================================================================
@@ -588,9 +596,17 @@ class ScoringService {
     innings.markModified("bowlers");
     await innings.save();
 
-    return await Innings.findById(innings._id)
+    // CRITICAL FIX: Return fully populated FRESH data
+    const updatedInnings = await Innings.findById(innings._id)
       .populate("batters.player")
-      .populate("bowlers.player");
+      .populate("bowlers.player")
+      .populate("battingTeam")
+      .populate("bowlingTeam");
+
+    console.log(`✅ New bowler selected: ${playerName} (ID: ${playerId})`);
+    console.log(`   Current Bowler: ${updatedInnings.currentBowler}`);
+
+    return updatedInnings;
   }
 
   // ===================================================================
@@ -919,10 +935,7 @@ class ScoringService {
       .populate("teamB.team")
       .populate({
         path: "innings",
-        populate: [
-          { path: "batters.player" },
-          { path: "bowlers.player" },
-        ],
+        populate: [{ path: "batters.player" }, { path: "bowlers.player" }],
       });
   }
 }

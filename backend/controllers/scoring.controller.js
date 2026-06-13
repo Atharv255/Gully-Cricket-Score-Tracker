@@ -69,8 +69,12 @@ class ScoringController {
         req.body
       );
 
+      // Get fresh live score with updated batsman info
       const liveScore = await liveService.getLiveScore(matchId);
+
+      // Emit BOTH events to update all clients immediately
       socketService.emitBatsmanChanged(matchId, { innings, liveScore });
+      socketService.emitScoreUpdate(matchId, { liveScore });
 
       return ApiResponse.success(
         res,
@@ -90,8 +94,12 @@ class ScoringController {
         req.body
       );
 
+      // Get fresh live score with updated bowler info
       const liveScore = await liveService.getLiveScore(matchId);
+
+      // Emit BOTH events to update all clients immediately
       socketService.emitBowlerChanged(matchId, { innings, liveScore });
+      socketService.emitScoreUpdate(matchId, { liveScore });
 
       return ApiResponse.success(
         res,

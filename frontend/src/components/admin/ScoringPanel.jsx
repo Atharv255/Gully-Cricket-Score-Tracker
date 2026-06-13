@@ -34,6 +34,10 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
   const [showFielderModal, setShowFielderModal] = useState(false);
   const [pendingWicket, setPendingWicket] = useState(null);
 
+  // CRITICAL: Cooldown flags to prevent modal reopening during refetch
+  const [justSelectedBatsman, setJustSelectedBatsman] = useState(false);
+  const [justSelectedBowler, setJustSelectedBowler] = useState(false);
+
   const [recordBall, { isLoading: isRecording }] = useRecordBallMutation();
   const [selectBatsman, { isLoading: isSelectingBatsman }] =
     useSelectBatsmanMutation();
@@ -93,6 +97,9 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
 
   // ===== AUTO-OPEN BOWLER MODAL =====
   useEffect(() => {
+    // CRITICAL: Skip if just selected bowler (cooldown)
+    if (justSelectedBowler) return;
+
     if (
       noBowler &&
       match?.status === "live" &&
@@ -101,11 +108,20 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
       canBat
     ) {
       const timer = setTimeout(() => {
-        setShowBowlerModal(true);
-      }, 300);
+        if (!justSelectedBowler) {
+          setShowBowlerModal(true);
+        }
+      }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [noBowler, match?.status, showBatsmanModal, canBat]);
+  }, [
+    noBowler,
+    match?.status,
+    showBatsmanModal,
+    showBowlerModal,
+    canBat,
+    justSelectedBowler,
+  ]);
 
   // Listen for external request to open batsman modal
   useEffect(() => {
@@ -120,6 +136,12 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
 
   // ===== AUTO-OPEN BATSMAN MODAL (when striker missing) =====
   useEffect(() => {
+    // CRITICAL: Don't reopen if user just selected a batsman (cooldown)
+    if (justSelectedBatsman) {
+      console.log("⏸️ Cooldown active - skipping auto-open");
+      return;
+    }
+
     if (
       noStriker &&
       match?.status === "live" &&
@@ -131,9 +153,12 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
       canBat
     ) {
       const timer = setTimeout(() => {
-        console.log("🏏 Auto-opening batsman modal - no striker found");
-        setShowBatsmanModal(true);
-      }, 500);
+        // Double-check after delay
+        if (!justSelectedBatsman) {
+          console.log("🏏 Auto-opening batsman modal - no striker found");
+          setShowBatsmanModal(true);
+        }
+      }, 1500); // Longer delay to allow refetch to complete
       return () => clearTimeout(timer);
     }
   }, [
@@ -145,10 +170,14 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
     showRunOutModal,
     showEndInningsModal,
     canBat,
+    justSelectedBatsman,
   ]);
 
   // ===== AUTO-OPEN BATSMAN MODAL (when non-striker missing - run out case) =====
   useEffect(() => {
+    // CRITICAL: Don't reopen if user just selected a batsman (cooldown)
+    if (justSelectedBatsman) return;
+
     if (
       noNonStriker &&
       striker &&
@@ -158,9 +187,11 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
       canBat
     ) {
       const timer = setTimeout(() => {
-        console.log("🏏 Auto-opening batsman modal - no non-striker");
-        setShowBatsmanModal(true);
-      }, 500);
+        if (!justSelectedBatsman) {
+          console.log("🏏 Auto-opening batsman modal - no non-striker");
+          setShowBatsmanModal(true);
+        }
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [
@@ -170,7 +201,29 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
     showBatsmanModal,
     showBowlerModal,
     canBat,
+    justSelectedBatsman,
   ]);
+
+  // ===== RESET COOLDOWN WHEN PLAYERS ARE DETECTED =====
+  useEffect(() => {
+    if (justSelectedBatsman && striker && nonStriker) {
+      const timer = setTimeout(() => {
+        console.log("✅ Players detected - clearing batsman cooldown");
+        setJustSelectedBatsman(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [justSelectedBatsman, striker, nonStriker]);
+
+  useEffect(() => {
+    if (justSelectedBowler && currentBowler) {
+      const timer = setTimeout(() => {
+        console.log("✅ Bowler detected - clearing bowler cooldown");
+        setJustSelectedBowler(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [justSelectedBowler, currentBowler]);
 
   // ===== HANDLE RUN BUTTON CLICKS =====
   const handleRun = useCallback(
@@ -489,27 +542,57 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
     setSelectedWicket("");
   }, []);
 
-  // ===== HANDLE BATSMAN SELECTION =====
+  // ===== HANDLE BATSMAN SELECTION (WITH COOLDOWN) =====
   const handleSelectBatsman = async (playerData) => {
     try {
       await selectBatsman({ matchId, ...playerData }).unwrap();
       setShowBatsmanModal(false);
-      toast.success(`${playerData.playerName} is the new batsman`);
+
+      // CRITICAL: Set cooldown to prevent auto-reopening during refetch
+      setJustSelectedBatsman(true);
+
+      toast.success(`${playerData.playerName} is the new batsman`, {
+        icon: "🏏",
+      });
+
+      // Refetch data
       onUpdate?.();
+
+      // Clear cooldown after 3 seconds (enough time for refetch)
+      setTimeout(() => {
+        setJustSelectedBatsman(false);
+        console.log("⏰ Batsman cooldown expired");
+      }, 3000);
     } catch (error) {
       toast.error(error?.data?.message || "Failed to select batsman");
+      // Reset cooldown on error
+      setJustSelectedBatsman(false);
     }
   };
 
-  // ===== HANDLE BOWLER SELECTION =====
+  // ===== HANDLE BOWLER SELECTION (WITH COOLDOWN) =====
   const handleSelectBowler = async (playerData) => {
     try {
       await selectBowler({ matchId, ...playerData }).unwrap();
       setShowBowlerModal(false);
-      toast.success(`${playerData.playerName} will bowl now`);
+
+      // CRITICAL: Set cooldown to prevent auto-reopening during refetch
+      setJustSelectedBowler(true);
+
+      toast.success(`${playerData.playerName} will bowl now`, {
+        icon: "⚾",
+      });
+
       onUpdate?.();
+
+      // Clear cooldown after 3 seconds
+      setTimeout(() => {
+        setJustSelectedBowler(false);
+        console.log("⏰ Bowler cooldown expired");
+      }, 3000);
     } catch (error) {
       toast.error(error?.data?.message || "Failed to select bowler");
+      setJustSelectedBowler(false);
     }
   };
 
@@ -579,7 +662,7 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
                   ({striker.runs}/{striker.balls}b)
                 </span>
               )}
-              {noStriker && (
+              {noStriker && !justSelectedBatsman && (
                 <button
                   onClick={() => setShowBatsmanModal(true)}
                   className="ml-2 text-xs text-amber-400 hover:text-amber-300 underline"
@@ -602,7 +685,7 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
                   ({nonStriker.runs}/{nonStriker.balls}b)
                 </span>
               )}
-              {noNonStriker && (
+              {noNonStriker && !justSelectedBatsman && (
                 <button
                   onClick={() => setShowBatsmanModal(true)}
                   className="ml-2 text-xs text-amber-400 hover:text-amber-300 underline"
@@ -620,7 +703,7 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
               >
                 {currentBowler?.playerName || "Not set"}
               </span>
-              {noBowler && (
+              {noBowler && !justSelectedBowler && (
                 <button
                   onClick={() => setShowBowlerModal(true)}
                   className="ml-2 text-xs text-amber-400 hover:text-amber-300 underline"
@@ -632,8 +715,15 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
           </div>
         </div>
 
-        {/* No Batsman Warning - PROMINENT */}
-        {(noStriker || noNonStriker) && canBat && (
+        {/* Cooldown Indicator (Subtle) */}
+        {(justSelectedBatsman || justSelectedBowler) && (
+          <div className="bg-cricket-green/10 border border-cricket-green/30 rounded-lg px-3 py-2 text-xs text-cricket-green text-center">
+            ✓ Updating player data...
+          </div>
+        )}
+
+        {/* No Batsman Warning - PROMINENT (Only show if not in cooldown) */}
+        {(noStriker || noNonStriker) && canBat && !justSelectedBatsman && (
           <div className="bg-red-950/40 border border-red-700 rounded-lg p-4 text-center animate-pulse">
             <p className="text-red-300 text-sm font-bold mb-3">
               ⚠️ Batsman Required!{" "}
@@ -649,19 +739,23 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
         )}
 
         {/* No Bowler Warning */}
-        {noBowler && !noStriker && !noNonStriker && canBat && (
-          <div className="bg-amber-950/40 border border-amber-700 rounded-lg p-3 text-center">
-            <p className="text-amber-300 text-sm font-bold mb-2">
-              ⚠️ Select a bowler to continue scoring
-            </p>
-            <button
-              onClick={() => setShowBowlerModal(true)}
-              className="btn-warning text-sm"
-            >
-              Select Bowler Now
-            </button>
-          </div>
-        )}
+        {noBowler &&
+          !noStriker &&
+          !noNonStriker &&
+          canBat &&
+          !justSelectedBowler && (
+            <div className="bg-amber-950/40 border border-amber-700 rounded-lg p-3 text-center">
+              <p className="text-amber-300 text-sm font-bold mb-2">
+                ⚠️ Select a bowler to continue scoring
+              </p>
+              <button
+                onClick={() => setShowBowlerModal(true)}
+                className="btn-warning text-sm"
+              >
+                Select Bowler Now
+              </button>
+            </div>
+          )}
 
         {/* All Out Warning */}
         {allOut && (
