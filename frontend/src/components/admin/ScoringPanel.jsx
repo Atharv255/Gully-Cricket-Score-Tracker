@@ -52,14 +52,21 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
   const currentBowler = innings?.bowlers?.find((b) => b.isCurrentBowler);
   const availableBatsmen = innings?.batters || [];
 
+  // CRITICAL: Detect missing players
   const noBowler = !currentBowler && !innings?.currentBowler;
+  const noStriker = !striker && innings?.batters?.length > 0;
+  const noNonStriker = !nonStriker && innings?.batters?.length > 0;
+
+  // Check if innings is still active
+  const inningsActive = innings?.status !== "completed";
+
+  // Check if we can still bat (not all out)
+  const maxWickets = (innings?.batters?.length || 11) - 1;
+  const allOut = innings?.wickets >= maxWickets;
+  const canBat = inningsActive && !allOut;
 
   const isDisabled =
-    isRecording ||
-    isUndoing ||
-    !striker ||
-    !nonStriker ||
-    !currentBowler;
+    isRecording || isUndoing || !striker || !nonStriker || !currentBowler;
 
   // Get bowling team players from match data
   const getBowlingTeamPlayers = () => {
@@ -84,26 +91,98 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
 
   const bowlingTeamPlayers = getBowlingTeamPlayers();
 
-  // Auto open bowler modal if no bowler is set
+  // ===== AUTO-OPEN BOWLER MODAL =====
   useEffect(() => {
-    if (noBowler && match?.status === "live" && !showBowlerModal) {
+    if (
+      noBowler &&
+      match?.status === "live" &&
+      !showBowlerModal &&
+      !showBatsmanModal &&
+      canBat
+    ) {
       const timer = setTimeout(() => {
         setShowBowlerModal(true);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [noBowler, match?.status]);
+  }, [noBowler, match?.status, showBatsmanModal, canBat]);
+
+  // Listen for external request to open batsman modal
+  useEffect(() => {
+    const handleOpenBatsmanModal = () => {
+      setShowBatsmanModal(true);
+    };
+    window.addEventListener("openBatsmanModal", handleOpenBatsmanModal);
+    return () => {
+      window.removeEventListener("openBatsmanModal", handleOpenBatsmanModal);
+    };
+  }, []);
+
+  // ===== AUTO-OPEN BATSMAN MODAL (when striker missing) =====
+  useEffect(() => {
+    if (
+      noStriker &&
+      match?.status === "live" &&
+      !showBatsmanModal &&
+      !showBowlerModal &&
+      !showFielderModal &&
+      !showRunOutModal &&
+      !showEndInningsModal &&
+      canBat
+    ) {
+      const timer = setTimeout(() => {
+        console.log("🏏 Auto-opening batsman modal - no striker found");
+        setShowBatsmanModal(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    noStriker,
+    match?.status,
+    showBatsmanModal,
+    showBowlerModal,
+    showFielderModal,
+    showRunOutModal,
+    showEndInningsModal,
+    canBat,
+  ]);
+
+  // ===== AUTO-OPEN BATSMAN MODAL (when non-striker missing - run out case) =====
+  useEffect(() => {
+    if (
+      noNonStriker &&
+      striker &&
+      match?.status === "live" &&
+      !showBatsmanModal &&
+      !showBowlerModal &&
+      canBat
+    ) {
+      const timer = setTimeout(() => {
+        console.log("🏏 Auto-opening batsman modal - no non-striker");
+        setShowBatsmanModal(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    noNonStriker,
+    striker,
+    match?.status,
+    showBatsmanModal,
+    showBowlerModal,
+    canBat,
+  ]);
 
   // ===== HANDLE RUN BUTTON CLICKS =====
   const handleRun = useCallback(
     async (runs) => {
+      if (noStriker || noNonStriker) {
+        toast.error("Please select batsman first");
+        setShowBatsmanModal(true);
+        return;
+      }
       if (noBowler) {
         toast.error("Please select a bowler first");
         setShowBowlerModal(true);
-        return;
-      }
-      if (!striker || !nonStriker) {
-        toast.error("Please set striker and non-striker first");
         return;
       }
 
@@ -152,19 +231,22 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
       match,
       onUpdate,
       noBowler,
+      noStriker,
+      noNonStriker,
     ]
   );
 
   // ===== HANDLE WICKET BUTTON CLICKS =====
   const handleWicket = useCallback(
     async (wicketType) => {
+      if (noStriker || noNonStriker) {
+        toast.error("Please select batsman first");
+        setShowBatsmanModal(true);
+        return;
+      }
       if (noBowler) {
         toast.error("Please select a bowler first");
         setShowBowlerModal(true);
-        return;
-      }
-      if (!striker || !nonStriker) {
-        toast.error("Please set all players first");
         return;
       }
 
@@ -228,10 +310,12 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
       match,
       onUpdate,
       noBowler,
+      noStriker,
+      noNonStriker,
     ]
   );
 
-  // ===== HANDLE FIELDER SELECTED (for caught/stumped) =====
+  // ===== HANDLE FIELDER SELECTED =====
   const handleFielderSelected = async ({ fielderName }) => {
     if (!pendingWicket) return;
 
@@ -290,7 +374,7 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
     }
   };
 
-  // ===== HANDLE SKIP FIELDER (record wicket without fielder name) =====
+  // ===== HANDLE SKIP FIELDER =====
   const handleSkipFielder = async () => {
     if (!pendingWicket) {
       setShowFielderModal(false);
@@ -483,7 +567,11 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
           <div className="flex items-center gap-4 flex-wrap text-sm">
             <div>
               <span className="text-gray-500 text-xs">Striker: </span>
-              <span className="text-white font-semibold">
+              <span
+                className={`font-semibold ${
+                  noStriker ? "text-red-400" : "text-white"
+                }`}
+              >
                 {striker?.playerName || "Not set"}
               </span>
               {striker && (
@@ -491,16 +579,36 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
                   ({striker.runs}/{striker.balls}b)
                 </span>
               )}
+              {noStriker && (
+                <button
+                  onClick={() => setShowBatsmanModal(true)}
+                  className="ml-2 text-xs text-amber-400 hover:text-amber-300 underline"
+                >
+                  Select Now
+                </button>
+              )}
             </div>
             <div>
               <span className="text-gray-500 text-xs">Non-Striker: </span>
-              <span className="text-white font-semibold">
+              <span
+                className={`font-semibold ${
+                  noNonStriker ? "text-red-400" : "text-white"
+                }`}
+              >
                 {nonStriker?.playerName || "Not set"}
               </span>
               {nonStriker && (
                 <span className="text-gray-400 text-xs ml-1">
                   ({nonStriker.runs}/{nonStriker.balls}b)
                 </span>
+              )}
+              {noNonStriker && (
+                <button
+                  onClick={() => setShowBatsmanModal(true)}
+                  className="ml-2 text-xs text-amber-400 hover:text-amber-300 underline"
+                >
+                  Select Now
+                </button>
               )}
             </div>
             <div>
@@ -524,8 +632,24 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
           </div>
         </div>
 
+        {/* No Batsman Warning - PROMINENT */}
+        {(noStriker || noNonStriker) && canBat && (
+          <div className="bg-red-950/40 border border-red-700 rounded-lg p-4 text-center animate-pulse">
+            <p className="text-red-300 text-sm font-bold mb-3">
+              ⚠️ Batsman Required!{" "}
+              {noStriker ? "Striker not set" : "Non-striker not set"}
+            </p>
+            <button
+              onClick={() => setShowBatsmanModal(true)}
+              className="btn-danger text-sm px-6 py-2"
+            >
+              🏏 Select Batsman Now
+            </button>
+          </div>
+        )}
+
         {/* No Bowler Warning */}
-        {noBowler && (
+        {noBowler && !noStriker && !noNonStriker && canBat && (
           <div className="bg-amber-950/40 border border-amber-700 rounded-lg p-3 text-center">
             <p className="text-amber-300 text-sm font-bold mb-2">
               ⚠️ Select a bowler to continue scoring
@@ -539,8 +663,20 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
           </div>
         )}
 
+        {/* All Out Warning */}
+        {allOut && (
+          <div className="bg-blue-950/40 border border-blue-700 rounded-lg p-3 text-center">
+            <p className="text-blue-300 text-sm font-bold mb-2">
+              🏏 All Out! Innings Complete
+            </p>
+            <button onClick={handleEndInnings} className="btn-primary text-sm">
+              End Innings
+            </button>
+          </div>
+        )}
+
         {/* Selected Extra Indicator */}
-        {selectedExtra && !noBowler && (
+        {selectedExtra && !noBowler && !noStriker && (
           <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg px-3 py-2 text-sm text-amber-400 font-medium flex items-center justify-between">
             <span>
               ⚠ Extra selected:{" "}
@@ -567,7 +703,7 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
           {/* Extras */}
           <ExtrasButtons
             onExtra={handleExtra}
-            disabled={isRecording || noBowler}
+            disabled={isRecording || noBowler || noStriker}
             selectedExtra={selectedExtra}
           />
 
@@ -630,7 +766,7 @@ const ScoringPanel = ({ matchId, innings, match, onUpdate }) => {
         innings={innings}
       />
 
-      {/* Run Out - Select Dismissed Batter Modal */}
+      {/* Run Out Modal */}
       <RunOutModal
         isOpen={showRunOutModal}
         onClose={() => setShowRunOutModal(false)}

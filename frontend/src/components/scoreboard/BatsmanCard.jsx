@@ -10,7 +10,6 @@ const BatterRow = ({ batter, isStriker }) => {
         isStriker ? "bg-cricket-green/10 border border-cricket-green/20" : ""
       }`}
     >
-      {/* Strike indicator */}
       <div className="w-5 flex-shrink-0">
         {isStriker ? (
           <span className="text-cricket-green font-bold text-sm">🏏</span>
@@ -19,7 +18,6 @@ const BatterRow = ({ batter, isStriker }) => {
         )}
       </div>
 
-      {/* Name */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-white truncate">
           {batter.playerName}
@@ -29,7 +27,6 @@ const BatterRow = ({ batter, isStriker }) => {
         </p>
       </div>
 
-      {/* Stats */}
       <div className="flex items-center gap-4 text-right">
         <div className="text-center">
           <p className="text-base font-bold text-white font-mono">
@@ -66,14 +63,12 @@ const BatterRow = ({ batter, isStriker }) => {
   );
 };
 
-const BatsmanCard = ({ striker, nonStriker }) => {
-  // Only show batters who are currently batting (not out)
+const BatsmanCard = ({ striker, nonStriker, onSelectBatsman }) => {
   const showStriker = striker && striker.status !== "out";
   const showNonStriker = nonStriker && nonStriker.status !== "out";
 
   return (
     <div className="card mb-4">
-      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
           Batsmen
@@ -87,25 +82,44 @@ const BatsmanCard = ({ striker, nonStriker }) => {
         </div>
       </div>
 
-      {/* Batters */}
       <div className="space-y-1">
         {showStriker ? (
           <BatterRow batter={striker} isStriker={true} />
         ) : (
-          <div className="py-2 px-3 bg-amber-950/20 border border-amber-900/30 rounded-lg">
-            <p className="text-xs text-amber-400 text-center">
-              ⚠️ Please select new batsman
-            </p>
+          <div className="py-3 px-3 bg-red-950/30 border border-red-900/50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-red-300 font-semibold">
+                ⚠️ Striker not selected
+              </p>
+              {onSelectBatsman && (
+                <button
+                  onClick={onSelectBatsman}
+                  className="text-xs bg-red-700 hover:bg-red-600 text-white font-bold px-3 py-1.5 rounded-md transition-colors"
+                >
+                  Select Now
+                </button>
+              )}
+            </div>
           </div>
         )}
 
         {showNonStriker ? (
           <BatterRow batter={nonStriker} isStriker={false} />
         ) : (
-          <div className="py-2 px-3 bg-amber-950/20 border border-amber-900/30 rounded-lg">
-            <p className="text-xs text-amber-400 text-center">
-              ⚠️ Non-striker pending
-            </p>
+          <div className="py-3 px-3 bg-amber-950/30 border border-amber-900/50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-amber-300 font-semibold">
+                ⚠️ Non-striker not selected
+              </p>
+              {onSelectBatsman && (
+                <button
+                  onClick={onSelectBatsman}
+                  className="text-xs bg-amber-700 hover:bg-amber-600 text-white font-bold px-3 py-1.5 rounded-md transition-colors"
+                >
+                  Select Now
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

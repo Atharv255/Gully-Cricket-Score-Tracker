@@ -88,12 +88,9 @@ const LiveScoringPage = () => {
   };
 
   const teamSize =
-    currentInnings?.totalPlayers ||
-    innings?.batters?.length ||
-    getTeamSize();
+    currentInnings?.totalPlayers || innings?.batters?.length || getTeamSize();
 
-  const matchTotalOvers =
-    currentInnings?.totalOvers || match?.totalOvers || 0;
+  const matchTotalOvers = currentInnings?.totalOvers || match?.totalOvers || 0;
 
   if (matchLoading || liveLoading)
     return <Loader text="Loading scoring panel..." />;
@@ -193,6 +190,11 @@ const LiveScoringPage = () => {
               <BatsmanCard
                 striker={currentInnings.striker}
                 nonStriker={currentInnings.nonStriker}
+                onSelectBatsman={() => {
+                  // Trigger event to open batsman modal in ScoringPanel
+                  const event = new CustomEvent("openBatsmanModal");
+                  window.dispatchEvent(event);
+                }}
               />
               {currentInnings.currentBowler ? (
                 <BowlerCard bowler={currentInnings.currentBowler} />
