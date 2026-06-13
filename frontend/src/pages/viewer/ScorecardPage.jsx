@@ -13,23 +13,50 @@ import Loader from "../../components/common/Loader";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
 import { formatDate } from "../../utils/formatters";
+import { generateMatchPDF } from "../../utils/pdfExport";
 import toast from "react-hot-toast";
 
 const ScorecardPage = () => {
   const { matchId } = useParams();
   const [activeInnings, setActiveInnings] = useState(0);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const { data, isLoading, isError } = useGetMatchByIdQuery(matchId);
 
   const match = data?.data?.match;
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
-      toast.success("Link copied!");
+      toast.success("Link copied to clipboard!");
     });
   };
 
-  const handleDownload = () => {
-    toast("PDF export coming soon!", { icon: "📄" });
+  const handleDownloadPDF = async () => {
+    if (!match) {
+      toast.error("Match data not available");
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+
+    try {
+      // Show loading toast
+      const loadingToast = toast.loading("Generating PDF...");
+
+      // Small delay for UI feedback
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const fileName = generateMatchPDF(match);
+
+      toast.dismiss(loadingToast);
+      toast.success(`📄 PDF downloaded: ${fileName}`, {
+        duration: 4000,
+      });
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      toast.error(error?.message || "Failed to generate PDF");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   if (isLoading) return <Loader text="Loading scorecard..." />;
@@ -77,10 +104,11 @@ const ScorecardPage = () => {
           <Button
             size="xs"
             variant="secondary"
-            onClick={handleDownload}
+            onClick={handleDownloadPDF}
+            loading={isGeneratingPDF}
             icon={MdFileDownload}
           >
-            PDF
+            {isGeneratingPDF ? "Generating..." : "Download PDF"}
           </Button>
         </div>
       </div>
@@ -113,6 +141,31 @@ const ScorecardPage = () => {
           </div>
         </div>
       </Card>
+
+      {/* PDF Info Card */}
+      <div className="bg-blue-950/30 border border-blue-900/50 rounded-xl p-3">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">📄</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-blue-300">
+              Download Match Scorecard
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Get a professional PDF copy with full batting & bowling statistics,
+              extras, and match result.
+            </p>
+          </div>
+          <Button
+            size="xs"
+            variant="primary"
+            onClick={handleDownloadPDF}
+            loading={isGeneratingPDF}
+            icon={MdFileDownload}
+          >
+            PDF
+          </Button>
+        </div>
+      </div>
 
       {/* Innings Tabs */}
       {innings.length > 1 && (

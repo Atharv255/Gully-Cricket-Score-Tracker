@@ -6,14 +6,19 @@ import {
   MdShare,
   MdDelete,
   MdEdit,
+  MdFileDownload,
 } from "react-icons/md";
-import { useGetMatchByIdQuery, useDeleteMatchMutation } from "../../features/match/matchApi";
+import {
+  useGetMatchByIdQuery,
+  useDeleteMatchMutation,
+} from "../../features/match/matchApi";
 import Loader from "../../components/common/Loader";
 import Button from "../../components/common/Button";
 import Badge from "../../components/common/Badge";
 import Card from "../../components/common/Card";
 import ScorecardTable from "../../components/viewer/ScorecardTable";
 import { formatDate } from "../../utils/formatters";
+import { generateMatchPDF } from "../../utils/pdfExport";
 import toast from "react-hot-toast";
 
 const ManageMatchPage = () => {
@@ -21,6 +26,7 @@ const ManageMatchPage = () => {
   const navigate = useNavigate();
   const { data, isLoading, isError } = useGetMatchByIdQuery(matchId);
   const [deleteMatch, { isLoading: isDeleting }] = useDeleteMatchMutation();
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const match = data?.data?.match;
 
@@ -30,6 +36,28 @@ const ManageMatchPage = () => {
       navigator.clipboard.writeText(url).then(() => {
         toast.success("Match link copied to clipboard!");
       });
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!match) {
+      toast.error("Match data not available");
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+
+    try {
+      const loadingToast = toast.loading("Generating PDF...");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const fileName = generateMatchPDF(match);
+      toast.dismiss(loadingToast);
+      toast.success(`📄 PDF downloaded: ${fileName}`, { duration: 4000 });
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      toast.error(error?.message || "Failed to generate PDF");
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -49,7 +77,10 @@ const ManageMatchPage = () => {
     return (
       <div className="text-center py-16">
         <p className="text-gray-500">Match not found</p>
-        <Link to="/admin/dashboard" className="text-cricket-green text-sm mt-2 block">
+        <Link
+          to="/admin/dashboard"
+          className="text-cricket-green text-sm mt-2 block"
+        >
           Back to Dashboard
         </Link>
       </div>
@@ -178,7 +209,18 @@ const ManageMatchPage = () => {
       {/* Scorecards */}
       {match.innings?.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-bold text-white">Scorecards</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white">Scorecards</h2>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleDownloadPDF}
+              loading={isGeneratingPDF}
+              icon={MdFileDownload}
+            >
+              Download PDF
+            </Button>
+          </div>
           {match.innings.map((innings) => (
             <ScorecardTable key={innings._id} innings={innings} />
           ))}
@@ -186,7 +228,7 @@ const ManageMatchPage = () => {
       )}
 
       {/* Actions */}
-      <Card>
+      <Card title="Match Actions">
         <div className="flex flex-wrap gap-3">
           <Button
             variant="outline"
@@ -195,6 +237,15 @@ const ManageMatchPage = () => {
             size="sm"
           >
             Share Link
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleDownloadPDF}
+            loading={isGeneratingPDF}
+            icon={MdFileDownload}
+            size="sm"
+          >
+            Download PDF
           </Button>
           <Link to={`/live/${matchId}`} target="_blank">
             <Button variant="secondary" size="sm">
