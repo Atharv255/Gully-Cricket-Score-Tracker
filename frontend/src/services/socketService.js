@@ -1,7 +1,8 @@
 import { io } from "socket.io-client";
 
 const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+  import.meta.env.VITE_SOCKET_URL ||
+  "https://gully-cricket-score-tracker.onrender.com";
 
 class SocketService {
   constructor() {
@@ -16,10 +17,11 @@ class SocketService {
     this.socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
+      withCredentials: true,
     });
 
     this.socket.on("connect", () => {

@@ -1,9 +1,13 @@
 import axios from "axios";
 import toast from "react-hot-toast";
 
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://gully-cricket-score-tracker.onrender.com/api";
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
-  timeout: 15000,
+  baseURL: API_URL,
+  timeout: 30000, // 30 seconds (Render free tier may take time to wake up)
   headers: {
     "Content-Type": "application/json",
   },
@@ -44,6 +48,14 @@ axiosInstance.interceptors.response.use(
 
     if (error.response?.status >= 500) {
       toast.error("Server error. Please try again.");
+    }
+
+    // Handle timeout (Render free tier cold start)
+    if (error.code === "ECONNABORTED") {
+      toast.error(
+        "Server is waking up. Please try again in 30 seconds.",
+        { duration: 5000 }
+      );
     }
 
     return Promise.reject(error);
